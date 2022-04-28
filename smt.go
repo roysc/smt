@@ -246,8 +246,14 @@ func (smt *SMT) delete(node treeNode, depth int, path []byte, orphans *orphanNod
 		if err != nil {
 			return node, err
 		}
-		if _, ok := ext.child.(*leafNode); ok {
-			return ext.child, nil
+		switch n := ext.child.(type) {
+		case *leafNode:
+			return n, nil
+		case *extensionNode:
+			// Join this extension with the child
+			smt.addOrphan(orphans, n)
+			n.pathBounds[0] = ext.pathBounds[0]
+			node = n
 		}
 		ext.setDirty()
 		return node, nil
@@ -268,16 +274,21 @@ func (smt *SMT) delete(node treeNode, depth int, path []byte, orphans *orphanNod
 	if err != nil {
 		return node, err
 	}
-	// We can only replace this node with a leaf -
-	// Inner nodes exist at a fixed depth, and can't be moved.
-	if *child == nil {
-		if _, ok := (*sib).(*leafNode); ok {
-			return *sib, nil
-		}
-	}
-	if *sib == nil {
-		if _, ok := (*child).(*leafNode); ok {
-			return *child, nil
+	// Handle replacement of this node, depending on the new child states.
+	// Note that inner nodes exist at a fixed depth, and can't be moved.
+	children := [2]*treeNode{child, sib}
+	for i := 0; i < 2; i++ {
+		if *children[i] == nil {
+			switch n := (*children[1-i]).(type) {
+			case *leafNode:
+				return n, nil
+			case *extensionNode:
+				// "Absorb" this node into the extension by prepending
+				smt.addOrphan(orphans, n)
+				n.pathBounds[0]--
+				n.setDirty()
+				return n, nil
+			}
 		}
 	}
 	inner.setDirty()
