@@ -13,16 +13,18 @@ type CachedMapStore struct {
 	cache   map[string]operation // map of key to operation
 	deletes map[string]struct{}
 	db      MapStore
+	cap     uint64 // starting capacity of cache
 }
 
 type operation = []byte
 
 // NewCachedMap creates a new empty CachedMapStore.
-func NewCachedMap(db MapStore, limit uint64) *CachedMapStore {
+func NewCachedMap(db MapStore, cap uint64) *CachedMapStore {
 	return &CachedMapStore{
-		cache:   make(map[string]operation, limit),
+		cache:   make(map[string]operation, cap),
 		deletes: map[string]struct{}{},
 		db:      db,
+		cap:     cap,
 	}
 }
 
@@ -66,6 +68,7 @@ func (cm *CachedMapStore) Commit() error {
 			return err
 		}
 	}
-	cm.cache = map[string]operation{}
+	cm.cache = make(map[string]operation, cm.cap)
+	cm.deletes = map[string]struct{}{}
 	return nil
 }
